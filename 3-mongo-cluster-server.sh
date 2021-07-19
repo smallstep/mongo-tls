@@ -128,6 +128,10 @@ Environment=STEPPATH=/root/.step \\
             KEY_LOCATION=/var/lib/mongo/mongo.key
 WorkingDirectory=/var/lib/mongo
 
+; We can't renew a certificate that doesn't have ClientAuth, so we will get a new one.
+ExecStart=/usr/bin/step ca certificate $LOCAL_HOSTNAME \${CERT_LOCATION} \${KEY_LOCATION} \
+   --provisioner "MongoDB Server" --san $LOCAL_HOSTNAME --san $PUBLIC_HOSTNAME
+
 ; Restart lighttpd docker containers after the certificate is successfully renewed.
 ExecStartPost=/usr/bin/env bash -c 'cat \${CERT_LOCATION} \${KEY_LOCATION} > /var/lib/mongo/mongo.pem'
 ExecStartPost=/usr/local/bin/docker-compose restart

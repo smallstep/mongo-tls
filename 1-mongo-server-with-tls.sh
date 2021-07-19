@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Certificate issuer will be "${CA_NAME} Intermediate CA"
-CA_URL="https://172.31.37.41"
-CA_FINGERPRINT="a98bdb3a507edd27b518f4f460ad2a4dd93b9f3c03e9763a6928adc00369334a"
+CA_URL="https://ip-172-31-45-246.us-east-2.compute.internal"
+CA_FINGERPRINT="ffb581419cc6dd8f3bbd7d408fc4dacbf574e0790a9c7804c3e66a9310a8fcf3"
 MONGO_CA_PASSWORD="changeme"
 
 apt update
