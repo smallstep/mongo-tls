@@ -9,8 +9,8 @@ CA_NAME="Smallstep"
 CA_PRIVATE_KEY_PASSWORD="smallsteplabs"
 CA_EMAIL="carl@smallstep.com"
 
-# The password for the MongoDB client CA provisioner.
-MONGO_CLIENT_CA_PASSWORD="changeme"
+# The password for the MongoDB service account CA provisioner.
+MONGO_SERVICE_USER_CA_PASSWORD="changeme"
 
 # MongoDB certificate DN Organization name (O=) — For MongoDB, this value must be the same
 # on both client and server TLS certificates.
@@ -25,6 +25,13 @@ DN_ORG_NAME="Smallstep"
 # cluster member certs from other client certs.
 SERVER_DN_ORG_UNIT="DevOps"
 CLIENT_DN_ORG_UNIT="MongoDB"
+
+# Leave these alone if you're running on AWS; otherwise you'll need to change them
+# to match your environment.
+LOCAL_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/local-hostname`
+LOCAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
+PUBLIC_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/public-hostname`
+PUBLIC_IP=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`
 
 apt update
 apt install -y jq
@@ -60,16 +67,6 @@ mkdir -p $(step path)/db
 mv $(step path) /etc/step-ca
 export STEPPATH=/etc/step-ca
 echo $CA_PRIVATE_KEY_PASSWORD > $STEPPATH/password.txt
-
-# Add a service to systemd for our CA.
-curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/step-ca.service \
-     -o /etc/systemd/system/step-ca.service
-
-LOCAL_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/local-hostname`
-LOCAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
-PUBLIC_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/public-hostname`
-PUBLIC_IP=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`
-AWS_ACCOUNT_ID=`curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep accountId | awk '{print $3}' | sed  's/"//g' | sed 's/,//g'`
 
 # Set up our basic CA configuration and generate root keys
 step ca init --name="$CA_NAME" \
@@ -148,7 +145,7 @@ cat <<< $(jq '(.authority.provisioners[] | select(.name == "MongoDB Cluster")) +
     }' /etc/step-ca/config/ca.json) > /etc/step-ca/config/ca.json
 
 
-echo "$MONGO_CLIENT_CA_PASSWORD" > /etc/step-ca/client-password.txt
+echo "$MONGO_SERVICE_USER_CA_PASSWORD" > /etc/step-ca/client-password.txt
 step ca provisioner add "MongoDB Service User" --create --password-file /etc/step-ca/client-password.txt
 
 cat <<< $(jq '(.authority.provisioners[] | select(.name == "MongoDB Service User")) += {
@@ -168,6 +165,10 @@ cat <<< $(jq '(.authority.provisioners[] | select(.name == "MongoDB Service User
     }' /etc/step-ca/config/ca.json) > /etc/step-ca/config/ca.json
 
 echo "export STEPPATH=$STEPPATH" >> /root/.bash_profile
+
+# Add a service to systemd for our CA.
+curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/step-ca.service \
+     -o /etc/systemd/system/step-ca.service
 
 systemctl daemon-reload
 

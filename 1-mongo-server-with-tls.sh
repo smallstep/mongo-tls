@@ -1,9 +1,21 @@
 #!/bin/bash
 
-# Certificate issuer will be "${CA_NAME} Intermediate CA"
+# This is the CA URL and the CA root certificate fingerprint.
+# Get your root certificate fingerprint by running
+# `step certificate fingerprint /etc/step-ca/certs/root_ca.crt`
+# on your CA.
 CA_URL="https://ip-172-31-45-246.us-east-2.compute.internal"
 CA_FINGERPRINT="ffb581419cc6dd8f3bbd7d408fc4dacbf574e0790a9c7804c3e66a9310a8fcf3"
-MONGO_CA_PASSWORD="changeme"
+
+# This is the password for the MongoDB Service User CA provisioner.
+MONGO_SERVICE_USER_CA_PASSWORD="changeme"
+
+# Leave these alone if you're running on AWS; otherwise you'll need to change them
+# to match your environment.
+LOCAL_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/local-hostname`
+LOCAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
+PUBLIC_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/public-hostname`
+PUBLIC_IP=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`
 
 apt update
 apt install -y jq
@@ -16,6 +28,7 @@ rm /root/get-docker.sh
 curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
+# Install step
 case $(arch) in
 x86_64)
     ARCH="amd64"
@@ -25,27 +38,13 @@ aarch64)
     ;;
 esac
 
-# Install step
 STEP_VERSION=$(curl -s https://api.github.com/repos/smallstep/cli/releases/latest | jq -r '.tag_name')
-
 curl -sLO https://github.com/smallstep/cli/releases/download/$STEP_VERSION/step_linux_${STEP_VERSION:1}_$ARCH.tar.gz
 tar xvzf step_linux_${STEP_VERSION:1}_$ARCH.tar.gz
 cp step_${STEP_VERSION:1}/bin/step /usr/bin
 
-LOCAL_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/local-hostname`
-LOCAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
-PUBLIC_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/public-hostname`
-PUBLIC_IP=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`
-# AWS_ACCOUNT_ID=`curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep accountId | awk '{print $3}' | sed  's/"//g' | sed 's/,//g'`
-
 # Set up our basic CA configuration and generate root keys
 step ca bootstrap --ca-url "$CA_URL" --fingerprint "$CA_FINGERPRINT"
-
-curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.service \
-     -o /etc/systemd/system/cert-renewer@.service
-
-curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.timer \
-     -o /etc/systemd/system/cert-renewer@.timer
 
 # Install mongo shell
 curl -LO https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/4.4/multiverse/binary-amd64/mongodb-org-shell_4.4.6_amd64.deb
@@ -53,20 +52,19 @@ dpkg -i mongodb-org-shell_4.4.6_amd64.deb
 
 mkdir -p /var/lib/mongo/ca-certs
 
-echo "$MONGO_CA_PASSWORD" > /var/lib/mongo/ca-password.txt
+echo "$MONGO_SERVICE_USER_CA_PASSWORD" > /var/lib/mongo/ca-password.txt
 step ca root /var/lib/mongo/ca-certs/root_ca.crt
 chown -R 999 /var/lib/mongo/ca-certs
 
-
-mkdir -p /var/lib/mongo/simple
-cat <<EOF > /var/lib/mongo/simple/compose.yml
+mkdir -p /var/lib/mongo
+cat <<EOF > /var/lib/mongo/compose.yml
 services:
   mongo:
     image: mongo
     command: ["--bind_ip_all", "--tlsMode", "requireTLS", "--tlsCAFile", "/usr/local/share/ca-certificates/root_ca.crt", "--tlsCertificateKeyFile", "/run/secrets/server-certificate"]
     volumes:
-      - ../ca-certs:/usr/local/share/ca-certificates
-      - ./db:/data/db
+      - ca-certs:/usr/local/share/ca-certificates
+      - \$PWD/db:/data/db
     secrets:
       - server-certificate
     ports:
@@ -74,7 +72,7 @@ services:
 
 secrets:
   server-certificate:
-    file: ../mongo.pem
+    file: mongo.pem
 EOF
 
 pushd /var/lib/mongo
@@ -85,8 +83,14 @@ chmod 600 mongo.pem
 # The mongodb container user (uid 999) should own mongo.pem
 chown 999 mongo.pem
 
-# Set up renewal for the mongo server cert
+# Automate renewal for the mongo server cert
 pushd /etc/systemd/system
+curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.service \
+     -o cert-renewer@.service
+
+curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.timer \
+     -o cert-renewer@.timer
+
 mkdir cert-renewer@mongo-server.service.d
 cat <<EOF > cert-renewer@mongo-server.service.d/override.conf
 [Service]
@@ -95,20 +99,19 @@ cat <<EOF > cert-renewer@mongo-server.service.d/override.conf
 Environment=STEPPATH=/root/.step \\
             CERT_LOCATION=/var/lib/mongo/mongo.crt \\
             KEY_LOCATION=/var/lib/mongo/mongo.key
-WorkingDirectory=/var/lib/mongo/simple
+WorkingDirectory=/var/lib/mongo
 
 ; We can't renew a certificate that doesn't have ClientAuth, so we will get a new one.
-ExecStart=/usr/bin/step ca certificate $LOCAL_HOSTNAME \${CERT_LOCATION} \${KEY_LOCATION} \
+ExecStart=/usr/bin/step ca certificate $LOCAL_HOSTNAME \${CERT_LOCATION} \${KEY_LOCATION} \\
    --provisioner "MongoDB Server" --san $LOCAL_HOSTNAME --san $PUBLIC_HOSTNAME
 
-; Restart lighttpd docker containers after the certificate is successfully renewed.
-ExecStartPost=cat \${CERT_LOCATION} \${KEY_LOCATION} > /var/lib/mongo/mongo.pem
+; Restart Docker containers after the certificate is successfully renewed.
+ExecStartPost=/usr/bin/env bash -c 'cat \${CERT_LOCATION} \${KEY_LOCATION} > mongo.pem'
 ExecStartPost=/usr/local/bin/docker-compose restart
 EOF
 systemctl daemon-reload
 systemctl start cert-renewer@mongo-server.timer
 popd
 
-cd simple
 docker-compose up -d
 popd

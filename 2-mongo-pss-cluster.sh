@@ -5,6 +5,13 @@ CA_URL="https://172.31.40.206"
 CA_FINGERPRINT="3ec01122c5c29be42fe8d1c769e39011ddf4fb76fe0f814de19040026a3b5b19"
 MONGO_CA_PASSWORD="changeme"
 
+# Leave these alone if you're running on AWS; otherwise you'll need to change them
+# to match your environment.
+LOCAL_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/local-hostname`
+LOCAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
+PUBLIC_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/public-hostname`
+PUBLIC_IP=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`
+
 apt update
 apt install -y jq
 
@@ -32,12 +39,6 @@ curl -sLO https://github.com/smallstep/cli/releases/download/$STEP_VERSION/step_
 tar xvzf step_linux_${STEP_VERSION:1}_$ARCH.tar.gz
 cp step_${STEP_VERSION:1}/bin/step /usr/bin
 
-LOCAL_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/local-hostname`
-LOCAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
-PUBLIC_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/public-hostname`
-PUBLIC_IP=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4`
-# AWS_ACCOUNT_ID=`curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep accountId | awk '{print $3}' | sed  's/"//g' | sed 's/,//g'`
-
 # Set up our basic CA configuration and generate root keys
 step ca bootstrap --ca-url "$CA_URL" --fingerprint "$CA_FINGERPRINT"
 
@@ -64,8 +65,8 @@ services:
     image: mongo
     command: ["--replSet", "rs0", "--clusterAuthMode", "x509", "--transitionToAuth", "--bind_ip_all", "--tlsMode", "requireTLS", "--tlsCAFile", "/usr/local/share/ca-certificates/root_ca.crt", "--tlsCertificateKeyFile", "/run/secrets/server-certificate", "--tlsClusterFile", "/run/secrets/cluster-certificate"]
     volumes:
-      - ./ca-certs:/usr/local/share/ca-certificates
-      - ./db/rs0-0:/data/db
+      - \$PWD/ca-certs:/usr/local/share/ca-certificates
+      - \$PWD/db/rs0-0:/data/db
     secrets:
       - server-certificate
       - cluster-certificate
@@ -75,8 +76,8 @@ services:
     image: mongo
     command: ["--replSet", "rs0", "--clusterAuthMode", "x509", "--transitionToAuth", "--bind_ip_all", "--tlsMode", "requireTLS", "--tlsCAFile", "/usr/local/share/ca-certificates/root_ca.crt", "--tlsCertificateKeyFile", "/run/secrets/server-certificate", "--tlsClusterFile", "/run/secrets/cluster-certificate"]
     volumes:
-      - ./ca-certs:/usr/local/share/ca-certificates
-      - ./db/rs0-1:/data/db
+      - \$PWD/ca-certs:/usr/local/share/ca-certificates
+      - \$PWD/db/rs0-1:/data/db
     secrets:
       - server-certificate
       - cluster-certificate
@@ -86,8 +87,8 @@ services:
     image: mongo
     command: ["--replSet", "rs0", "--clusterAuthMode", "x509", "--transitionToAuth", "--bind_ip_all", "--tlsMode", "requireTLS", "--tlsCAFile", "/usr/local/share/ca-certificates/root_ca.crt", "--tlsCertificateKeyFile", "/run/secrets/server-certificate", "--tlsClusterFile", "/run/secrets/cluster-certificate"]
     volumes:
-      - ./ca-certs:/usr/local/share/ca-certificates
-      - ./db/rs0-2:/data/db
+      - \$PWD/ca-certs:/usr/local/share/ca-certificates
+      - \$PWD/db/rs0-2:/data/db
     secrets:
       - server-certificate
       - cluster-certificate
@@ -96,9 +97,9 @@ services:
 
 secrets:
   server-certificate:
-    file: ./mongo.pem
+    file: \$PWD/mongo.pem
   cluster-certificate:
-    file: ./mongo_cluster.pem
+    file: \$PWD/mongo_cluster.pem
 EOF
 
 pushd /var/lib/mongo
@@ -129,7 +130,7 @@ Environment=STEPPATH=/root/.step \\
 WorkingDirectory=/var/lib/mongo
 
 ; We can't renew a certificate that doesn't have ClientAuth, so we will get a new one.
-ExecStart=/usr/bin/step ca certificate $LOCAL_HOSTNAME \${CERT_LOCATION} \${KEY_LOCATION} \
+ExecStart=/usr/bin/step ca certificate $LOCAL_HOSTNAME \${CERT_LOCATION} \${KEY_LOCATION} \\
    --provisioner "MongoDB Server" --san $LOCAL_HOSTNAME --san $PUBLIC_HOSTNAME
 
 ; Restart lighttpd docker containers after the certificate is successfully renewed.
@@ -148,7 +149,7 @@ Environment=STEPPATH=/root/.step \\
             KEY_LOCATION=/var/lib/mongo/mongo_cluster.key
 WorkingDirectory=/var/lib/mongo
 
-; Restart lighttpd docker containers after the certificate is successfully renewed.
+; Restart Docker containers after the certificate is successfully renewed.
 ExecStartPost=/usr/bin/env bash -c 'cat \${CERT_LOCATION} \${KEY_LOCATION} > /var/lib/mongo/mongo_cluster.pem'
 ExecStartPost=/usr/local/bin/docker-compose restart
 EOF
