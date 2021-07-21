@@ -4,8 +4,8 @@
 # Get your root certificate fingerprint by running
 # `step certificate fingerprint /etc/step-ca/certs/root_ca.crt`
 # on your CA.
-CA_URL="https://ip-172-31-45-246.us-east-2.compute.internal"
-CA_FINGERPRINT="ffb581419cc6dd8f3bbd7d408fc4dacbf574e0790a9c7804c3e66a9310a8fcf3"
+CA_URL="https://ip-172-31-40-201.us-east-2.compute.internal"
+CA_FINGERPRINT="bb82364c660d97c3120b9593983dd91b8f027ac0ad29fc1ab3e8b12df52c7a46"
 
 # This is the password for the MongoDB Service User CA provisioner.
 MONGO_SERVICE_USER_CA_PASSWORD="changeme"
@@ -63,7 +63,7 @@ services:
     image: mongo
     command: ["--bind_ip_all", "--tlsMode", "requireTLS", "--tlsCAFile", "/usr/local/share/ca-certificates/root_ca.crt", "--tlsCertificateKeyFile", "/run/secrets/server-certificate"]
     volumes:
-      - ca-certs:/usr/local/share/ca-certificates
+      - \$PWD/ca-certs:/usr/local/share/ca-certificates
       - \$PWD/db:/data/db
     secrets:
       - server-certificate
@@ -100,10 +100,6 @@ Environment=STEPPATH=/root/.step \\
             CERT_LOCATION=/var/lib/mongo/mongo.crt \\
             KEY_LOCATION=/var/lib/mongo/mongo.key
 WorkingDirectory=/var/lib/mongo
-
-; We can't renew a certificate that doesn't have ClientAuth, so we will get a new one.
-ExecStart=/usr/bin/step ca certificate $LOCAL_HOSTNAME \${CERT_LOCATION} \${KEY_LOCATION} \\
-   --provisioner "MongoDB Server" --san $LOCAL_HOSTNAME --san $PUBLIC_HOSTNAME
 
 ; Restart Docker containers after the certificate is successfully renewed.
 ExecStartPost=/usr/bin/env bash -c 'cat \${CERT_LOCATION} \${KEY_LOCATION} > mongo.pem'

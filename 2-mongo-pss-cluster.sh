@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Certificate issuer will be "${CA_NAME} Intermediate CA"
-CA_URL="https://172.31.40.206"
-CA_FINGERPRINT="3ec01122c5c29be42fe8d1c769e39011ddf4fb76fe0f814de19040026a3b5b19"
-MONGO_CA_PASSWORD="changeme"
+CA_URL="https://ip-172-31-40-201.us-east-2.compute.internal"
+CA_FINGERPRINT="bb82364c660d97c3120b9593983dd91b8f027ac0ad29fc1ab3e8b12df52c7a46"
+MONGO_SERVICE_USER_CA_PASSWORD="changeme"
 
 # Leave these alone if you're running on AWS; otherwise you'll need to change them
 # to match your environment.
@@ -53,12 +53,13 @@ curl -LO https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/4.4/multive
 dpkg -i mongodb-org-shell_4.4.6_amd64.deb
 
 mkdir -p /var/lib/mongo/ca-certs
+pushd /var/lib/mongo
+echo "$MONGO_SERVICE_USER_CA_PASSWORD" > ca-password.txt
+chmod 600 ca-password.txt
+step ca root ca-certs/root_ca.crt
+# The mongo container user (uid 999) should own ca-certs
+chown -R 999 ca-certs
 
-echo "$MONGO_CA_PASSWORD" > /var/lib/mongo/ca-password.txt
-step ca root /var/lib/mongo/ca-certs/root_ca.crt
-chown -R 999 /var/lib/mongo/ca-certs
-
-mkdir -p /var/lib/mongo
 cat <<EOF > /var/lib/mongo/compose.yml
 services:
   mongo_rs0_0:
@@ -102,12 +103,11 @@ secrets:
     file: \$PWD/mongo_cluster.pem
 EOF
 
-pushd /var/lib/mongo
 step ca certificate $LOCAL_HOSTNAME mongo.crt mongo.key \
    --provisioner "MongoDB Server" --san $LOCAL_HOSTNAME --san $PUBLIC_HOSTNAME
 cat mongo.crt mongo.key > mongo.pem
 chmod 600 mongo.pem
-# The mongodb container user (uid 999) should own mongo.pem
+# The mongo container user (uid 999) should own mongo.pem
 chown 999 mongo.pem
 
 step ca certificate $LOCAL_HOSTNAME mongo_cluster.crt mongo_cluster.key \
@@ -115,7 +115,6 @@ step ca certificate $LOCAL_HOSTNAME mongo_cluster.crt mongo_cluster.key \
 cat mongo_cluster.crt mongo_cluster.key > mongo_cluster.pem
 chmod 600 mongo_cluster.pem
 chown 999 mongo_cluster.pem
-
 
 # Set up renewal for the mongo server cert
 pushd /etc/systemd/system
@@ -129,16 +128,11 @@ Environment=STEPPATH=/root/.step \\
             KEY_LOCATION=/var/lib/mongo/mongo.key
 WorkingDirectory=/var/lib/mongo
 
-; We can't renew a certificate that doesn't have ClientAuth, so we will get a new one.
-ExecStart=/usr/bin/step ca certificate $LOCAL_HOSTNAME \${CERT_LOCATION} \${KEY_LOCATION} \\
-   --provisioner "MongoDB Server" --san $LOCAL_HOSTNAME --san $PUBLIC_HOSTNAME
-
 ; Restart lighttpd docker containers after the certificate is successfully renewed.
 ExecStartPost=/usr/bin/env bash -c 'cat \${CERT_LOCATION} \${KEY_LOCATION} > /var/lib/mongo/mongo.pem'
 ExecStartPost=/usr/local/bin/docker-compose restart
 EOF
 
-pushd /etc/systemd/system
 mkdir cert-renewer@mongo-cluster.service.d
 cat <<EOF > cert-renewer@mongo-cluster.service.d/override.conf
 [Service]
@@ -161,4 +155,34 @@ popd
 
 docker-compose up -d
 popd
+
+# Initialize the replica set.
+
+# wait for mongodb to start up
+sleep 15
+
+# First create an admin certificate to login
+pushd /root
+step ca certificate admin@smallstep.com admin.crt admin.key \
+   --provisioner "MongoDB Service User" \
+   --provisioner-password-file /var/lib/mongo/ca-password.txt
+cat admin.crt admin.key > admin.pem
+
+LOCAL_HOSTNAME=`curl -s http://169.254.169.254/latest/meta-data/local-hostname`
+
+cat <<EOF > repl.js
+rs.initiate( {
+   _id : "rs0",
+   members: [
+      { _id: 0, host: "${LOCAL_HOSTNAME}:27017" },
+      { _id: 1, host: "${LOCAL_HOSTNAME}:27018" },
+      { _id: 2, host: "${LOCAL_HOSTNAME}:27019" }
+   ]
+});
+rs.conf();
+EOF
+
+mongo --tls --tlsCertificateKeyFile admin.pem \
+      --tlsCAFile /var/lib/mongo/ca-certs/root_ca.crt \
+      --host $LOCAL_HOSTNAME repl.js
 

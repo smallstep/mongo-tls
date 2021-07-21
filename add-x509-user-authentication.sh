@@ -30,3 +30,9 @@ mongo --tls --tlsCertificateKeyFile carl.pem \
 
 # If that works, require X509 authentication:
 # Add --auth to mongod startup
+
+# Bad user
+step ca certificate boop@smallstep.com boop.crt boop.key \
+   --provisioner "MongoDB Service User" \
+   --provisioner-password-file /var/lib/mongo/ca-password.txt
+cat boop.crt boop.key > boop.pem

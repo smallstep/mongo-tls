@@ -89,7 +89,7 @@ cat <<EOF > /etc/step-ca/templates/x509/server.tpl
     },
     "sans": {{ toJson .SANs }},
     "keyUsage": ["digitalSignature"],
-    "extKeyUsage": ["serverAuth"]
+    "extKeyUsage": ["clientAuth", "serverAuth"]
 }
 EOF
 
