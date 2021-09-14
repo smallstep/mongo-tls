@@ -149,8 +149,8 @@ ExecStartPost=/usr/local/bin/docker-compose restart
 EOF
 
 systemctl daemon-reload
-systemctl start cert-renewer@mongo-server.timer
-systemctl start cert-renewer@mongo-cluster.timer
+systemctl enable --now cert-renewer@mongo-server.timer
+systemctl enable --now cert-renewer@mongo-cluster.timer
 popd
 
 docker-compose up -d
