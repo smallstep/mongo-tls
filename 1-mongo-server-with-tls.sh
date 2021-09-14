@@ -106,7 +106,7 @@ ExecStartPost=/usr/bin/env bash -c 'cat \${CERT_LOCATION} \${KEY_LOCATION} > mon
 ExecStartPost=/usr/local/bin/docker-compose restart
 EOF
 systemctl daemon-reload
-systemctl start cert-renewer@mongo-server.timer
+systemctl enable --now cert-renewer@mongo-server.timer
 popd
 
 docker-compose up -d
