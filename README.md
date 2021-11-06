@@ -17,4 +17,4 @@ Next, you can run the following examples on separate machines:
 Both examples use Docker Compose for simplicity.
 In a production environment, you'd obviously want to run a cluster on several machines.
 
-Finally, you can add X509 Certificate Authentication (for both service users and human users) by following the instructions in `add-x509-user-authenticaiton.sh`.
+Finally, you can enable X509 Certificate Authentication (for both service users and human users) by following the instructions in `add-x509-user-authenticaiton.sh`.
