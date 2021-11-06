@@ -4,6 +4,8 @@ These scripts can be used to set up various example MongoDB server configuration
 
 These scripts should be run on Ubuntu 20.04 (typically as system init scripts).
 
+**[See our blog series, Securing MongoDB with TLS, for a detailed introduction and walkthrough of these scripts](https://www.mongodb.com/developer/article/securing-mongodb-with-tls/)**.
+
 All of these Mongo configurations require an online [`step-ca` Certificate Authority](https://github.com/smallstep/certificates/).
 Configure and run `0-step-ca.sh` to set one up.
 
