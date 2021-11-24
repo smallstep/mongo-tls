@@ -85,10 +85,10 @@ chown 999 mongo.pem
 
 # Automate renewal for the mongo server cert
 pushd /etc/systemd/system
-curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.service \
+curl -sL https://files.smallstep.com/cert-renewer@.service \
      -o cert-renewer@.service
 
-curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.timer \
+curl -sL https://files.smallstep.com/cert-renewer@.timer \
      -o cert-renewer@.timer
 
 mkdir cert-renewer@mongo-server.service.d

@@ -42,10 +42,10 @@ cp step_${STEP_VERSION:1}/bin/step /usr/bin
 # Set up our basic CA configuration and generate root keys
 step ca bootstrap --ca-url "$CA_URL" --fingerprint "$CA_FINGERPRINT"
 
-curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.service \
+curl -sL https://files.smallstep.com/cert-renewer@.service \
      -o /etc/systemd/system/cert-renewer@.service
 
-curl -sL https://raw.githubusercontent.com/smallstep/certificates/master/systemd/cert-renewer@.timer \
+curl -sL https://files.smallstep.com/cert-renewer@.timer \
      -o /etc/systemd/system/cert-renewer@.timer
 
 # Install mongo shell
