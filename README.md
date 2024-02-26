@@ -2,7 +2,7 @@
 
 These scripts can be used to set up various example MongoDB server configurations that require TLS and use certificates issued by an internal CA.
 
-These scripts should be run on Ubuntu 20.04 (typically as system init scripts).
+These scripts were tested on Ubuntu 23.10 and Debian Bookworm
 
 **[See our blog series, Securing MongoDB with TLS, for a detailed introduction and walkthrough of these scripts](https://www.mongodb.com/developer/article/securing-mongodb-with-tls/)**.
 
