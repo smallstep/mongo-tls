@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Tested on Debian Bookworm and Ubuntu 20.04
+
+# Prerequisites:
+# curl
+# setcap
+
+# Note: This script will install jq
+
 # Certificate issuer will be "${CA_NAME} Intermediate CA"
 CA_NAME="Smallstep"
 
