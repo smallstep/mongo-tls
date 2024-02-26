@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Tested on Debian Bookworm and Ubuntu 20.04
-
 # Prerequisites:
 # curl
 # setcap
