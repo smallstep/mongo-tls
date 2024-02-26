@@ -46,17 +46,16 @@ aarch64)
 esac
 
 # Install step and step-ca
-
 CA_VERSION=$(curl -s https://api.github.com/repos/smallstep/certificates/releases/latest | jq -r '.tag_name')
 STEP_VERSION=$(curl -s https://api.github.com/repos/smallstep/cli/releases/latest | jq -r '.tag_name')
 
-curl -sLO https://github.com/smallstep/cli/releases/download/$STEP_VERSION/step_linux_${STEP_VERSION:1}_$ARCH.tar.gz
-tar xvzf step_linux_${STEP_VERSION:1}_$ARCH.tar.gz
-cp step_${STEP_VERSION:1}/bin/step /usr/bin
+curl -LO https://github.com/smallstep/cli/releases/download/$STEP_VERSION/step_linux_$ARCH.tar.gz
+tar xvzf step_linux_$ARCH.tar.gz
+cp step_linux_$ARCH/bin/step /usr/bin
 
-curl -sLO https://github.com/smallstep/certificates/releases/download/$CA_VERSION/step-ca_linux_${CA_VERSION:1}_$ARCH.tar.gz
-tar -xf step-ca_linux_${CA_VERSION:1}_$ARCH.tar.gz
-cp step-ca_${CA_VERSION:1}/bin/step-ca /usr/bin
+curl -LO https://github.com/smallstep/certificates/releases/download/$CA_VERSION/step-ca_linux_$ARCH.tar.gz
+tar -xf step-ca_linux_$ARCH.tar.gz
+cp step-ca_linux_$ARCH/step-ca /usr/bin
 setcap CAP_NET_BIND_SERVICE=+eip $(which step-ca)
 
 useradd --system --home /etc/step-ca --shell /bin/false step
